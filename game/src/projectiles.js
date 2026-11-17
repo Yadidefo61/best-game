@@ -4,9 +4,11 @@
 // against enemies (with pierce), enemy bolts against the keeper.
 import { COLORS } from './config.js';
 import { chance, rand } from './rng.js';
-import { burst, addText } from './particles.js';
+import { burst, addText, ringBurst } from './particles.js';
 import { damagePlayer } from './player.js';
 import { spawnPickup } from './pickups.js';
+import { searMult } from './light.js';
+import { registerKill } from './combo.js';
 
 export function spawnPlayerBullets(state) {
   const p = state.player;
@@ -31,16 +33,39 @@ export function spawnPlayerBullets(state) {
 function killEnemy(state, index) {
   const e = state.enemies[index];
   state.enemies.splice(index, 1);
-  state.score += e.score;
+  const gained = registerKill(state, e.score);
+  state.score += gained;
   state.kills += 1;
   state.sound.enemyDie();
   burst(state, e.x, e.y, e.color, 14, 260);
   state.shake = Math.max(state.shake, e.kind === 'brute' ? 7 : 3);
-  addText(state, e.x, e.y - 14, `+${e.score}`, '#ffe66d');
+  addText(state, e.x, e.y - 14, `+${gained}`, '#ffe66d');
+  if (e.isBoss) {
+    // A fallen boss pays out: a big bonus, a heart and a ward, and a banner.
+    state.score += 500;
+    state.banner = `${e.name.toUpperCase()} FALLEN!  +500`;
+    state.bannerTimer = 2.2;
+    state.shake = Math.max(state.shake, 12);
+    ringBurst(state, e.x, e.y, '#ffe9a3');
+    burst(state, e.x, e.y, '#ffe9a3', 30, 340);
+    spawnPickup(state, e.x - 20, e.y, 'heart');
+    spawnPickup(state, e.x + 20, e.y, 'ward');
+  }
   const rng = state.rng;
   if (chance(rng, 0.16)) spawnPickup(state, e.x, e.y, 'shard');
   else if (chance(rng, 0.07)) spawnPickup(state, e.x, e.y, 'heart');
   else if (chance(rng, 0.04)) spawnPickup(state, e.x, e.y, 'ward');
+}
+
+// Hurt one enemy by an amount, killing it when its health runs out.
+// Used by bullets and by the Lantern Nova; the boss is never knocked back.
+export function damageEnemy(state, enemy, amount) {
+  enemy.hp -= amount;
+  enemy.hitFlash = 0.12;
+  if (enemy.hp <= 0) {
+    const index = state.enemies.indexOf(enemy);
+    if (index >= 0) killEnemy(state, index);
+  }
 }
 
 export function updateBullets(state, dt) {
@@ -60,13 +85,15 @@ export function updateBullets(state, dt) {
         const rr = b.radius + e.radius;
         if (dx * dx + dy * dy > rr * rr) continue;
         b.hitSet.add(e);
-        e.hp -= b.damage;
-        e.hitFlash = 0.12;
+        // A hit knocks the enemy back along the bolt, less for big bodies,
+        // and sears harder inside the lantern's light.
+        const blen = Math.hypot(b.vx, b.vy) || 1;
+        const kb = Math.min(1, 20 / e.radius) * 26;
+        e.x += (b.vx / blen) * kb;
+        e.y += (b.vy / blen) * kb;
+        damageEnemy(state, e, b.damage * searMult(state, e));
         state.sound.enemyHit();
         burst(state, b.x, b.y, COLORS.ember, 4, 140);
-        if (e.hp <= 0) {
-          killEnemy(state, ei);
-        }
         if (b.pierce > 0) {
           b.pierce -= 1;
         } else {

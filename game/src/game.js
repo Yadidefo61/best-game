@@ -11,7 +11,8 @@ import { updateEnemies } from './enemies.js';
 import { resolveBodyCollisions, updateBullets } from './projectiles.js';
 import { updatePickups } from './pickups.js';
 import { updateParticles } from './particles.js';
-import { applyUpgradeChoice, onWaveCleared, startWave, updateSpawning } from './waves.js';
+import { applyUpgradeChoice, maybeSpawnBoss, onWaveCleared, startWave, updateSpawning } from './waves.js';
+import { createCombo, updateCombo } from './combo.js';
 import { drawGame } from './render.js';
 
 export { STEP };
@@ -66,6 +67,8 @@ export function createGame() {
     spawnQueue: [],
     spawnTimer: 0,
     waveState: 'idle',
+    bossPending: false,
+    combo: createCombo(),
     upgradeChoices: [],
     upgradeRects: [],
     banner: '',
@@ -98,6 +101,8 @@ export function resetGame(state, seed) {
   state.spawnQueue = [];
   state.spawnTimer = 0;
   state.waveState = 'idle';
+  state.bossPending = false;
+  state.combo = createCombo();
   state.upgradeChoices = [];
   state.upgradeRects = [];
   state.banner = '';
@@ -183,6 +188,7 @@ export function stepGame(state, input, dt) {
   resolveBodyCollisions(state);
   updatePickups(state, dt);
   updateParticles(state, dt);
+  updateCombo(state, dt);
 
   if (state.player.hp <= 0) {
     state.player.hp = 0;
@@ -191,7 +197,7 @@ export function stepGame(state, input, dt) {
     return;
   }
   if (state.waveState === 'fighting' && state.spawnQueue.length === 0 && state.enemies.length === 0) {
-    onWaveCleared(state);
+    if (!maybeSpawnBoss(state)) onWaveCleared(state);
   }
 }
 

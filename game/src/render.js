@@ -3,6 +3,7 @@
 // game-over / victory screens. Nothing here changes game state except
 // recording where the upgrade cards were drawn, so clicks can find them.
 import { ARENA_MARGIN, COLORS, VIEW_HEIGHT, VIEW_WIDTH, WIN_WAVE } from './config.js';
+import { darknessLevel, lightFlicker, lightRadius } from './light.js';
 
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
@@ -20,6 +21,18 @@ function drawBackground(ctx, state) {
   grad.addColorStop(1, COLORS.background);
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+
+  // Stone-tile floor: a checker of faint warm tiles under the grid.
+  for (let ty = ARENA_MARGIN; ty < VIEW_HEIGHT - ARENA_MARGIN; ty += 64) {
+    for (let tx = ARENA_MARGIN; tx < VIEW_WIDTH - ARENA_MARGIN; tx += 64) {
+      const cx = Math.round((tx - ARENA_MARGIN) / 64);
+      const cy = Math.round((ty - ARENA_MARGIN) / 64);
+      if ((cx + cy) % 2 === 0) {
+        ctx.fillStyle = 'rgba(255, 179, 71, 0.03)';
+        ctx.fillRect(tx, ty, 64, 64);
+      }
+    }
+  }
 
   ctx.strokeStyle = COLORS.grid;
   ctx.lineWidth = 1;
@@ -52,6 +65,36 @@ function drawBackground(ctx, state) {
   ctx.strokeStyle = '#3d2b66';
   ctx.lineWidth = 3;
   ctx.strokeRect(ARENA_MARGIN, ARENA_MARGIN, VIEW_WIDTH - ARENA_MARGIN * 2, VIEW_HEIGHT - ARENA_MARGIN * 2);
+
+  // Corner braziers: little bowls of fire that light the arena's edges.
+  const corners = [
+    [ARENA_MARGIN + 26, ARENA_MARGIN + 26],
+    [VIEW_WIDTH - ARENA_MARGIN - 26, ARENA_MARGIN + 26],
+    [ARENA_MARGIN + 26, VIEW_HEIGHT - ARENA_MARGIN - 26],
+    [VIEW_WIDTH - ARENA_MARGIN - 26, VIEW_HEIGHT - ARENA_MARGIN - 26],
+  ];
+  corners.forEach(([bx, by], i) => {
+    const flick = 1 + Math.sin(state.time * 6 + i * 1.7) * 0.15;
+    const glow = ctx.createRadialGradient(bx, by, 2, bx, by, 46 * flick);
+    glow.addColorStop(0, 'rgba(255, 179, 71, 0.35)');
+    glow.addColorStop(1, 'rgba(255, 179, 71, 0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(bx, by, 46 * flick, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#4a2c12';
+    ctx.beginPath();
+    ctx.arc(bx, by + 4, 10, 0, Math.PI);
+    ctx.fill();
+    ctx.fillStyle = '#ffb347';
+    ctx.beginPath();
+    ctx.arc(bx, by - 2, 6 * flick, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffe9a3';
+    ctx.beginPath();
+    ctx.arc(bx, by - 3, 3 * flick, 0, Math.PI * 2);
+    ctx.fill();
+  });
 }
 
 function drawPlayer(ctx, state) {
@@ -148,6 +191,81 @@ function drawEnemy(ctx, state, e) {
     ctx.arc(e.x - 8, e.y - 5, 4, 0, Math.PI * 2);
     ctx.arc(e.x + 8, e.y - 5, 4, 0, Math.PI * 2);
     ctx.fill();
+  } else if (e.kind === 'mote') {
+    // A small bright diamond, pulsing as it swerves.
+    const pulse = 1 + Math.sin(state.time * 12 + e.wobble) * 0.18;
+    ctx.save();
+    ctx.translate(e.x, e.y);
+    ctx.rotate(state.time * 2 + e.wobble);
+    ctx.beginPath();
+    ctx.moveTo(0, -e.radius * pulse);
+    ctx.lineTo(e.radius * pulse, 0);
+    ctx.lineTo(0, e.radius * pulse);
+    ctx.lineTo(-e.radius * pulse, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    ctx.fillStyle = '#eaffea';
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (e.kind === 'weaver') {
+    // A teal hexagon strung with a web.
+    ctx.beginPath();
+    for (let i = 0; i < 6; i += 1) {
+      const a = (Math.PI / 3) * i + state.time * 0.6;
+      const px = e.x + Math.cos(a) * e.radius;
+      const py = e.y + Math.sin(a) * e.radius;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(e.x - e.radius, e.y);
+    ctx.lineTo(e.x + e.radius, e.y);
+    ctx.moveTo(e.x, e.y - e.radius);
+    ctx.lineTo(e.x, e.y + e.radius);
+    ctx.stroke();
+    ctx.fillStyle = '#0d2b28';
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, 5, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (e.kind === 'boss') {
+    // The Warden / Night King: a huge horned orb with burning eyes.
+    const enraged = e.enraged;
+    if (enraged) {
+      ctx.globalAlpha = 0.5 + 0.5 * Math.abs(Math.sin(state.time * 10));
+    }
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    // Horns.
+    ctx.beginPath();
+    ctx.moveTo(e.x - e.radius * 0.7, e.y - e.radius * 0.55);
+    ctx.lineTo(e.x - e.radius * 1.15, e.y - e.radius * 1.25);
+    ctx.lineTo(e.x - e.radius * 0.25, e.y - e.radius * 0.85);
+    ctx.closePath();
+    ctx.moveTo(e.x + e.radius * 0.7, e.y - e.radius * 0.55);
+    ctx.lineTo(e.x + e.radius * 1.15, e.y - e.radius * 1.25);
+    ctx.lineTo(e.x + e.radius * 0.25, e.y - e.radius * 0.85);
+    ctx.closePath();
+    ctx.fill();
+    // Burning eyes.
+    ctx.fillStyle = enraged ? '#ff5964' : '#ffe9a3';
+    ctx.beginPath();
+    ctx.arc(e.x - 15, e.y - 8, 6, 0, Math.PI * 2);
+    ctx.arc(e.x + 15, e.y - 8, 6, 0, Math.PI * 2);
+    ctx.fill();
+    // Grinning maw.
+    ctx.strokeStyle = '#2a0640';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(e.x, e.y + 8, 16, 0.15 * Math.PI, 0.85 * Math.PI);
+    ctx.stroke();
   } else {
     // Dasher: a sharp triangle, flashing white while it telegraphs.
     if (e.charging) {
@@ -174,6 +292,15 @@ function drawEnemy(ctx, state, e) {
     ctx.fillRect(e.x - w / 2, e.y - e.radius - 10, w, 5);
     ctx.fillStyle = '#7ef0c1';
     ctx.fillRect(e.x - w / 2, e.y - e.radius - 10, w * Math.max(0, e.hp / e.maxHp), 5);
+  }
+  // A golden ring marks enemies standing inside the lantern's light,
+  // where they are slowed and seared.
+  if (e.inLight) {
+    ctx.strokeStyle = 'rgba(255, 233, 163, 0.85)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, e.radius + 5, 0, Math.PI * 2);
+    ctx.stroke();
   }
 }
 
@@ -216,6 +343,36 @@ function drawHud(ctx, state) {
   ctx.fillStyle = COLORS.dimText;
   ctx.fillText('WASD move  •  Mouse aim  •  Hold click to shoot  •  SPACE dash  •  P pause  •  M mute', 26, VIEW_HEIGHT - 18);
 
+  // Combo chain, under the score panel.
+  if (state.combo.count >= 2) {
+    ctx.textAlign = 'left';
+    ctx.font = 'bold 17px "Trebuchet MS", system-ui, sans-serif';
+    ctx.fillStyle = state.combo.mult > 1 ? COLORS.ember : COLORS.dimText;
+    ctx.fillText(`COMBO x${state.combo.count}  •  SCORE x${state.combo.mult.toFixed(1)}`, 26, 82);
+  }
+
+  // Boss health bar, top centre.
+  const boss = state.enemies.find((e) => e.isBoss);
+  if (boss) {
+    const bw2 = 420;
+    const bx2 = (VIEW_WIDTH - bw2) / 2;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = boss.enraged ? COLORS.danger : '#e0aaff';
+    ctx.font = 'bold 15px "Trebuchet MS", system-ui, sans-serif';
+    ctx.fillText(boss.name.toUpperCase(), VIEW_WIDTH / 2, 28);
+    ctx.fillStyle = 'rgba(10, 6, 24, 0.72)';
+    roundRect(ctx, bx2 - 6, 34, bw2 + 12, 14, 7);
+    ctx.fill();
+    ctx.fillStyle = '#3d0a12';
+    roundRect(ctx, bx2, 37, bw2, 8, 4);
+    ctx.fill();
+    ctx.fillStyle = boss.enraged ? COLORS.danger : '#b5179e';
+    if (boss.hp > 0) {
+      roundRect(ctx, bx2, 37, bw2 * Math.max(0, boss.hp / boss.maxHp), 8, 4);
+      ctx.fill();
+    }
+  }
+
   // Wave banner.
   if (state.bannerTimer > 0) {
     ctx.globalAlpha = Math.min(1, state.bannerTimer);
@@ -248,7 +405,10 @@ function drawTitle(ctx, state) {
   ctx.font = '18px "Trebuchet MS", system-ui, sans-serif';
   ctx.fillText('WASD / arrows — move      Mouse — aim      Hold click — shoot', VIEW_WIDTH / 2, 372);
   ctx.fillText('SPACE — dash through danger      1 / 2 / 3 — pick an upgrade', VIEW_WIDTH / 2, 400);
-  ctx.fillText('Between waves, choose a blessing. Clear wave 10 to win.', VIEW_WIDTH / 2, 428);
+  ctx.fillText('Between waves, choose a blessing. Chain kills for combo score.', VIEW_WIDTH / 2, 428);
+  ctx.fillStyle = COLORS.ember;
+  ctx.font = '18px "Trebuchet MS", system-ui, sans-serif';
+  ctx.fillText('Fight inside your light: it slows and sears the dark. Bosses wait on waves 5 and 10.', VIEW_WIDTH / 2, 456);
   ctx.fillStyle = COLORS.emberHot;
   ctx.font = 'bold 26px "Trebuchet MS", system-ui, sans-serif';
   ctx.fillText(state.best > 0 ? `BEST SCORE ${state.best}  —  PRESS ENTER OR CLICK TO PLAY` : 'PRESS ENTER OR CLICK TO PLAY', VIEW_WIDTH / 2, 500);
@@ -412,6 +572,25 @@ export function drawGame(ctx, state) {
     ctx.fillText(t.text, t.x, t.y);
   }
   ctx.globalAlpha = 1;
+
+  // The lantern's light and the closing dark: a hole of light around the
+  // keeper, darkness thickening toward the edges as the waves climb.
+  if (state.screen === 'play' || state.screen === 'pause' || state.screen === 'upgrade') {
+    const p = state.player;
+    const lr = lightRadius(state) * lightFlicker(state);
+    const dark = darknessLevel(state);
+    const hole = ctx.createRadialGradient(p.x, p.y, lr * 0.35, p.x, p.y, lr * 1.9);
+    hole.addColorStop(0, 'rgba(6, 4, 16, 0)');
+    hole.addColorStop(0.55, `rgba(6, 4, 16, ${dark * 0.45})`);
+    hole.addColorStop(1, `rgba(6, 4, 16, ${dark})`);
+    ctx.fillStyle = hole;
+    ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+    ctx.strokeStyle = 'rgba(255, 233, 163, 0.35)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, lr, 0, Math.PI * 2);
+    ctx.stroke();
+  }
 
   if (state.screen === 'play' || state.screen === 'pause' || state.screen === 'upgrade') drawHud(ctx, state);
 

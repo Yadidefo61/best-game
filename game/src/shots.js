@@ -104,6 +104,10 @@ export function stageShot(name, state) {
       decide(state, input, 'play');
       stepGame(state, input, STEP);
     }
+    // Floating score text from the warm-up fight must not print over the
+    // title's own words.
+    state.texts = [];
+    state.particles = [];
     state.screen = 'title';
     return { screen: 'title', best: state.best };
   }
@@ -123,7 +127,9 @@ export function stageShot(name, state) {
   }
 
   if (name === 'play') {
-    for (let i = 0; i < 20 / STEP; i += 1) {
+    // Thirty seconds in: past wave 1, into the motes and the combo chain,
+    // with the lantern's light ring on show.
+    for (let i = 0; i < 30 / STEP; i += 1) {
       if (state.screen === 'over' || state.screen === 'win') {
         startGame(state);
         i = 0;
@@ -144,6 +150,22 @@ export function stageShot(name, state) {
         decide(state, input, 'play');
         stepGame(state, input, STEP);
       }
+    }
+    // Chase a live combo chain so the frame shows the multiplier at work:
+    // keep fighting (a few seconds at most) until five chained kills.
+    for (let i = 0; i < 10 / STEP && state.combo.count < 5; i += 1) {
+      if (state.screen === 'over' || state.screen === 'win') {
+        startGame(state);
+        i = 0;
+        continue;
+      }
+      if (state.screen === 'upgrade') {
+        pressDigit(input, 'Digit2');
+        stepGame(state, input, STEP);
+        continue;
+      }
+      decide(state, input, 'play');
+      stepGame(state, input, STEP);
     }
     return { screen: state.screen, best: state.best };
   }

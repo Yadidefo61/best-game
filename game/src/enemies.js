@@ -1,9 +1,12 @@
-// The four enemy kinds of Emberlight Arena. Each kind is one behaviour:
-// wisps chase, spitters hold their distance and shoot, brutes lumber in
-// and soak damage, dashers telegraph and then charge. Spawning picks a
-// point on the arena edge, away from the player.
+// The enemy kinds of Emberlight Arena. Each kind is one behaviour:
+// wisps chase, motes swarm in swerves, spitters hold their distance and
+// shoot, weavers strafe and fire three-way spreads, brutes lumber in and
+// soak damage, dashers telegraph and then charge. Spawning picks a point
+// on the arena edge, away from the player. Bosses are steered by boss.js.
 import { ARENA_MARGIN, ENEMY_KINDS, VIEW_HEIGHT, VIEW_WIDTH } from './config.js';
 import { rand } from './rng.js';
+import { lightSlow } from './light.js';
+import { updateBoss } from './boss.js';
 
 export function makeEnemy(kind, x, y, wave) {
   const def = ENEMY_KINDS[kind];
@@ -30,6 +33,7 @@ export function makeEnemy(kind, x, y, wave) {
     telegraph: 0,
     hitFlash: 0,
     wobble: 0,
+    inLight: false,
   };
 }
 
@@ -63,6 +67,11 @@ export function updateEnemies(state, dt) {
   const p = state.player;
   const rng = state.rng;
   for (const e of state.enemies) {
+    // Bosses steer themselves in boss.js.
+    if (e.isBoss) {
+      updateBoss(state, e, dt);
+      continue;
+    }
     e.hitFlash -= dt;
     e.wobble += dt * 3;
     const dx = p.x - e.x;
@@ -75,6 +84,36 @@ export function updateEnemies(state, dt) {
       const wob = Math.sin(e.wobble) * 0.35;
       e.vx = (nx - ny * wob) * e.speed;
       e.vy = (ny + nx * wob) * e.speed;
+    } else if (e.kind === 'mote') {
+      // A fast swerver: it never flies straight, so it is hard to lead.
+      const wob = Math.sin(e.wobble * 2.2) * 0.9;
+      e.vx = (nx - ny * wob) * e.speed;
+      e.vy = (ny + nx * wob) * e.speed;
+    } else if (e.kind === 'weaver') {
+      const def = ENEMY_KINDS.weaver;
+      if (dist > 330) {
+        e.vx = nx * e.speed;
+        e.vy = ny * e.speed;
+      } else if (dist < 220) {
+        e.vx = -nx * e.speed * 0.7;
+        e.vy = -ny * e.speed * 0.7;
+      } else {
+        e.vx = -ny * e.speed * 0.5;
+        e.vy = nx * e.speed * 0.5;
+      }
+      e.shootTimer -= dt;
+      if (e.shootTimer <= 0 && dist < 520) {
+        e.shootTimer = def.shootInterval * rand(rng, 0.85, 1.2);
+        const base = Math.atan2(ny, nx);
+        for (const off of [-0.28, 0, 0.28]) {
+          state.enemyBullets.push({
+            x: e.x, y: e.y,
+            vx: Math.cos(base + off) * 200, vy: Math.sin(base + off) * 200,
+            radius: 6, damage: def.damage, life: 4, color: '#2ec4b6',
+          });
+        }
+        state.sound.tone(420, 0.08, 'sine', 0.03, 240);
+      }
     } else if (e.kind === 'spitter') {
       const def = ENEMY_KINDS.spitter;
       if (dist > def.keepDistance + 40) {
@@ -120,6 +159,12 @@ export function updateEnemies(state, dt) {
         }
       }
     }
+
+    // The lantern's light slows whatever stands inside it.
+    const slow = lightSlow(state, e);
+    e.inLight = slow < 1;
+    e.vx *= slow;
+    e.vy *= slow;
 
     e.x += e.vx * dt;
     e.y += e.vy * dt;

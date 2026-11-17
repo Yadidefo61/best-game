@@ -9,6 +9,11 @@ export const STEP = 1 / 60;
 export const WIN_WAVE = 10;
 export const SHOT_SEED = 7;
 
+export const LIGHT_BASE_RADIUS = 230;
+export const LIGHT_LOW_HP_RADIUS = 165;
+export const LIGHT_SLOW = 0.72;
+export const LIGHT_SEAR = 1.25;
+
 export const COLORS = {
   background: '#0d0a1a',
   backgroundEdge: '#17112e',
@@ -22,6 +27,9 @@ export const COLORS = {
   spitter: '#c77dff',
   brute: '#ff5964',
   dasher: '#4cc9f0',
+  mote: '#7dff8a',
+  weaver: '#2ec4b6',
+  boss: '#b5179e',
   bullet: '#ffe66d',
   enemyBullet: '#e07aff',
   heart: '#ff5d8f',
@@ -93,6 +101,37 @@ export const ENEMY_KINDS = {
     chargeInterval: 2.8,
     chargeSpeed: 460,
   },
+  mote: {
+    name: 'Gloom Mote',
+    radius: 10,
+    hp: 12,
+    speed: 168,
+    damage: 6,
+    score: 30,
+    color: COLORS.mote,
+    firstWave: 2,
+  },
+  weaver: {
+    name: 'Dusk Weaver',
+    radius: 18,
+    hp: 64,
+    speed: 74,
+    damage: 12,
+    score: 150,
+    color: COLORS.weaver,
+    firstWave: 5,
+    shootInterval: 3.0,
+  },
+  boss: {
+    name: 'Dusk Warden',
+    radius: 46,
+    hp: 950,
+    speed: 44,
+    damage: 26,
+    score: 1500,
+    color: COLORS.boss,
+    firstWave: 5,
+  },
 };
 
 // How many of each kind a wave fields. Counts grow with the wave so the
@@ -100,9 +139,11 @@ export const ENEMY_KINDS = {
 export function waveComposition(wave) {
   const list = [];
   list.push({ kind: 'wisp', count: 4 + wave * 2 });
+  if (wave >= 2) list.push({ kind: 'mote', count: 2 + wave });
   if (wave >= 2) list.push({ kind: 'spitter', count: 1 + Math.floor(wave / 2) });
   if (wave >= 3) list.push({ kind: 'brute', count: Math.floor(wave / 2) });
   if (wave >= 4) list.push({ kind: 'dasher', count: wave - 2 });
+  if (wave >= 5) list.push({ kind: 'weaver', count: 1 + Math.floor((wave - 3) / 2) });
   return list;
 }
 
@@ -169,6 +210,47 @@ export const UPGRADES = [
     icon: '⬡',
     description: 'Gain a ward that blocks one hit. It returns each wave.',
     apply(player) { player.ward = true; player.hasWard = true; },
+  },
+  {
+    id: 'flare',
+    name: 'Wide Wick',
+    icon: '◉',
+    description: '+35% lantern light radius. Your safe ground grows wider.',
+    apply(player) {
+      player.lightRadius *= 1.35;
+      if (player.lightDamageBonus > 0) player.lightRadius *= 1.1;
+    },
+  },
+  {
+    id: 'burn',
+    name: 'Searing Light',
+    icon: '☀',
+    description: 'Enemies inside your light take +50% damage. The light bites.',
+    apply(player) {
+      player.lightDamageBonus += 0.5;
+      if (player.lightRadius > LIGHT_BASE_RADIUS) player.lightDamageBonus += 0.25;
+    },
+  },
+  {
+    id: 'chain',
+    name: 'Ember Chain',
+    icon: '⛓',
+    description: 'Combo window +1.5s and +1 multiplier cap. Keep the chain alive.',
+    apply(player) { player.comboWindow += 1.5; player.comboCap += 1; },
+  },
+  {
+    id: 'nova',
+    name: 'Lantern Nova',
+    icon: '✺',
+    description: 'Your dash erupts in a nova that burns nearby enemies.',
+    apply(player) { player.nova = true; player.novaDamage += 40; },
+  },
+  {
+    id: 'regen',
+    name: 'Kindled Heart',
+    icon: '♨',
+    description: 'Regenerate 1.5 health every second. The lantern mends you.',
+    apply(player) { player.regen += 1.5; },
   },
 ];
 

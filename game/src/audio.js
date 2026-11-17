@@ -44,6 +44,15 @@ export function createSoundBank() {
     enemyHit() { this.tone(220, 0.05, 'triangle', 0.05, 140); },
     enemyDie() { this.tone(330, 0.16, 'sawtooth', 0.06, 60); },
     playerHurt() { this.tone(140, 0.22, 'sawtooth', 0.09, 55); },
+    bossRoar() {
+      this.tone(90, 0.6, 'sawtooth', 0.12, 42);
+      this.tone(135, 0.45, 'square', 0.05, 60);
+    },
+    comboUp() {
+      this.tone(660, 0.07, 'sine', 0.06, 660);
+      setTimeout(() => this.tone(990, 0.1, 'sine', 0.06, 990), 70);
+    },
+    nova() { this.tone(300, 0.18, 'triangle', 0.09, 1200); },
     pickup() { this.tone(880, 0.1, 'sine', 0.07, 1320); },
     heart() { this.tone(520, 0.18, 'sine', 0.08, 780); },
     waveClear() {

@@ -1,8 +1,9 @@
 // The lantern keeper: movement, dash, aiming and firing. The player is a
 // small glowing keeper carrying the Emberlight; everything about how they
 // feel to control lives here, and nothing else in the game moves them.
-import { ARENA_MARGIN, PLAYER_BASE, VIEW_HEIGHT, VIEW_WIDTH } from './config.js';
-import { spawnPlayerBullets } from './projectiles.js';
+import { ARENA_MARGIN, LIGHT_BASE_RADIUS, PLAYER_BASE, VIEW_HEIGHT, VIEW_WIDTH } from './config.js';
+import { damageEnemy, spawnPlayerBullets } from './projectiles.js';
+import { breakCombo } from './combo.js';
 
 export function createPlayer() {
   return {
@@ -32,6 +33,13 @@ export function createPlayer() {
     hasWard: false,
     ward: false,
     walkCycle: 0,
+    lightRadius: LIGHT_BASE_RADIUS,
+    lightDamageBonus: 0,
+    comboWindow: 2.5,
+    comboCap: 4,
+    regen: 0,
+    nova: false,
+    novaDamage: 60,
   };
 }
 
@@ -46,6 +54,11 @@ export function updatePlayer(state, input, dt) {
   p.fireTimer -= dt;
   p.dashLeft -= dt;
   p.invulnTimer -= dt;
+
+  // Kindled Heart: the lantern slowly mends its keeper.
+  if (p.regen > 0 && p.hp > 0) {
+    p.hp = Math.min(p.maxHp, p.hp + p.regen * dt);
+  }
 
   const move = input.moveVector();
   p.angle = Math.atan2(input.mouseY - p.y, input.mouseX - p.x);
@@ -79,6 +92,21 @@ export function updatePlayer(state, input, dt) {
       kind: 'ring', x: p.x, y: p.y, vx: 0, vy: 0, life: 0.3, maxLife: 0.3,
       radius: 12, color: '#6ee7ff', size: 3,
     });
+    // Lantern Nova: the dash erupts and burns everything close by.
+    if (p.nova) {
+      state.sound.nova();
+      state.particles.push({
+        kind: 'ring', x: p.x, y: p.y, vx: 0, vy: 0, life: 0.4, maxLife: 0.4,
+        radius: 20, color: '#ffb347', size: 4,
+      });
+      for (const e of state.enemies.slice()) {
+        const dx = e.x - p.x;
+        const dy = e.y - p.y;
+        if (dx * dx + dy * dy <= 150 * 150) {
+          damageEnemy(state, e, p.novaDamage);
+        }
+      }
+    }
   }
 
   p.x = Math.max(ARENA_MARGIN + p.radius, Math.min(VIEW_WIDTH - ARENA_MARGIN - p.radius, p.x));
@@ -112,5 +140,6 @@ export function damagePlayer(state, amount) {
   state.flash = 0.45;
   state.shake = Math.max(state.shake, 10);
   state.sound.playerHurt();
+  breakCombo(state);
   return amount;
 }

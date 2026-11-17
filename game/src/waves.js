@@ -4,6 +4,7 @@
 import { UPGRADES, WIN_WAVE, waveComposition } from './config.js';
 import { shuffle } from './rng.js';
 import { spawnEnemy } from './enemies.js';
+import { spawnBoss } from './boss.js';
 import { addText } from './particles.js';
 
 export function startWave(state, wave) {
@@ -18,9 +19,21 @@ export function startWave(state, wave) {
   state.banner = `WAVE ${wave}`;
   state.bannerTimer = 1.6;
   state.sound.waveStart();
+  // Waves 5 and 10 end with a boss, held back until the wave is cleared.
+  state.bossPending = wave === 5 || wave === WIN_WAVE;
   if (state.player.hasWard || state.player.ward) {
     state.player.hasWard = true;
   }
+}
+
+// When the arena is empty and the queue is spent, a pending boss walks
+// in instead of the wave clearing. Returns true when a boss spawned.
+export function maybeSpawnBoss(state) {
+  if (!state.bossPending) return false;
+  if (state.spawnQueue.length > 0 || state.enemies.length > 0) return false;
+  state.bossPending = false;
+  spawnBoss(state);
+  return true;
 }
 
 // Trickle the queue into the arena, a few at a time so the wave builds
